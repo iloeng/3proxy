@@ -8,13 +8,15 @@
 
 BUILDDIR = ../bin/
 CC ?= gcc
-CFLAGS := -O2 -s -c -mthreads  -DWITH_WSAPOLL $(CFLAGS)
+CFLAGS ?= -O3 -flto -fno-strict-aliasing
+CFLAGS += -c -mthreads  -DWITH_WSAPOLL
 COUT = -o 
 LN ?= $(CC)
-LDFLAGS := -O2 -s -mthreads $(LDFLAGS)
+LDFLAGS ?= -flto -fno-strict-aliasing
+LDFLAGS += -mthreads
 DLFLAGS ?= -shared
 DLSUFFICS = .dll
-LIBS := -lws2_32 -lodbc32 -ladvapi32 -luser32 $(LIBS)
+LIBS += -lws2_32 -lodbc32 -ladvapi32 -luser32
 LIBSPREFIX = -l
 LIBSSUFFIX =
 LNOUT = -o 

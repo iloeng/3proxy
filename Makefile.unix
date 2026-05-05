@@ -12,10 +12,12 @@ MANDIR ?= /usr/share/man
 CC ?= gcc
 
 # you may need -L/usr/pkg/lib for older NetBSD versions
-CFLAGS := -g -O2 -fno-strict-aliasing -c -pthread -D_THREAD_SAFE -D_REENTRANT -DNOODBC  -DFD_SETSIZE=4096 -DWITH_POLL -DWITH_UN $(CFLAGS)
+CFLAGS ?= -O3 -flto
+CFLAGS += -fno-strict-aliasing -c -pthread -D_THREAD_SAFE -D_REENTRANT -DNOODBC  -DFD_SETSIZE=4096 -DWITH_POLL -DWITH_UN
 COUT = -o 
 LN ?= $(CC)
-LDFLAGS ?= -O2 -fno-strict-aliasing -pthread
+LDFLAGS ?= -flto
+LDFLAGS += -pthread -fno-strict-aliasing
 # -lpthreads may be reuqired on some platforms instead of -pthreads
 # -ldl or -lld may be required for some platforms
 DCFLAGS ?= -fPIC
