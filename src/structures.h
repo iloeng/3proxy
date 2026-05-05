@@ -719,7 +719,6 @@ struct extparam {
 };
 
 struct property {
-	struct property * next;
 	char * name;
 	EXTENDFUNC e_f;
 	int type;
@@ -731,6 +730,7 @@ struct datatype {
 	EXTENDFUNC i_f;
 	PRINTFUNC p_f;
 	struct property * properties;
+	unsigned properties_count;
 };
 
 struct node {
@@ -900,7 +900,9 @@ typedef enum {
 	TYPE_WEEKDAYS,
 	TYPE_TIME,
 	TYPE_PERIOD,
-	TYPE_SERVER
+	TYPE_SERVER,
+	TYPE_PASSWORD,
+	TYPE_HOSTNAME
 }DATA_TYPE;
 
 #ifdef  __cplusplus

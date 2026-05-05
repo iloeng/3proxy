@@ -134,7 +134,7 @@ static void printstr(struct printparam* pp, char* str){
 static void printval(void *value, int type, int level, struct printparam* pp){
 	struct node pn, cn;
 	struct property *p;
-	int i;
+	int i, pi;
 
 	pn.iteration = NULL;
 	pn.parent = NULL;
@@ -142,7 +142,8 @@ static void printval(void *value, int type, int level, struct printparam* pp){
 	pn.value =  value;
 
 	printstr(pp, "<item>");
-	for(p = datatypes[type].properties; p; ) {
+	for(pi = 0; pi < (int)datatypes[type].properties_count; ) {
+		p = datatypes[type].properties + pi;
 		cn.iteration = NULL;
 		cn.parent = &pn;
 		cn.type = p->type;
@@ -171,7 +172,7 @@ static void printval(void *value, int type, int level, struct printparam* pp){
 				if(!strcmp(p->name, "next")){
 /*					printstr(pp, "<!-- -------------------- -->\n"); */
 					printstr(pp, "</item>\n<item>");
-					p = datatypes[type].properties;
+					pi = 0;
 					pn.value = value = cn.value;
 					continue;
 				}
@@ -182,7 +183,7 @@ static void printval(void *value, int type, int level, struct printparam* pp){
 				}
 			}
 		}
-		p=p->next;
+		pi++;
 	}
 	printstr(pp, "</item>");
 }

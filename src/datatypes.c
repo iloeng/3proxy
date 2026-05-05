@@ -96,7 +96,7 @@ static void pr_wdays(struct node *node, CBFUNC cbf, void*cb){
 static void pr_time(struct node *node, CBFUNC cbf, void*cb){
 	char buf[16];
 	int t = *(int *)node;
-	
+
 	(*cbf)(cb, buf, sprintf(buf, "%02d:%02d:%02d", (t/3600)%24, (t/60)%60, t%60));
 }
 
@@ -132,6 +132,12 @@ static void pr_string(struct node *node, CBFUNC cbf, void*cb){
 	else (*cbf)(cb, "(NULL)", 6);
 }
 
+static void pr_password(struct node *node, CBFUNC cbf, void*cb){
+	if(node->value && *(unsigned char *)node->value){
+		(*cbf)(cb, "********", 8);
+	}
+}
+
 static void pr_rotation(struct node *node, CBFUNC cbf, void*cb){
 	char * lstrings[] = {
 		"N", "C", "H", "D", "W", "M", "Y", "N"
@@ -156,7 +162,7 @@ static void pr_operations(struct node *node, CBFUNC cbf, void*cb){
 	if(operation & HTTP){
 		if((operation & HTTP) == HTTP)
 		 (*cbf)(cb, buf, sprintf(buf, "HTTP"));
-		else 
+		else
 		 (*cbf)(cb, buf, sprintf(buf, "%s%s%s%s%s%s%s%s%s",
 			(operation & HTTP_GET)? "HTTP_GET" : "",
 			((operation & HTTP_GET) && (operation & (HTTP_PUT|HTTP_POST|HTTP_HEAD|HTTP_OTHER)))? "," : "",
@@ -239,6 +245,18 @@ static void pr_userlist(struct node *node, CBFUNC cbf, void*cb){
 	}
 }
 
+static void pr_hostname(struct node *node, CBFUNC cbf, void*cb){
+	struct hostname *hl = (struct hostname *)node->value;
+	if(!hl) {
+		(*cbf)(cb, "*", 1);
+		return;
+	}
+	for(; hl; hl = hl->next){
+	 (*cbf)(cb, (char *)hl->name, (int)strlen((char *)hl->name));
+	 if(hl->next)(*cbf)(cb, ",", 1);
+	}
+}
+
 int printiple(char *buf, struct iplist* ipl){
 	 int addrlen = (ipl->family == AF_INET6)?16:4, i;
 	 i = myinet_ntop(ipl->family, &ipl->ip_from, buf, addrlen);
@@ -315,9 +333,23 @@ static void * ef_pwlist_type(struct node * node){
 			return "NT";
 		case LM:
 			return "LM";
+		case UN:
+			return "UN";
 		default:
 			return "UNKNOWN";
 	}
+}
+
+static void * ef_hostname_next(struct node * node){
+	return ((struct hostname *)node->value) -> next;
+}
+
+static void * ef_hostname_name(struct node * node){
+	return ((struct hostname *)node->value) -> name;
+}
+
+static void * ef_hostname_matchtype(struct node * node){
+	return &((struct hostname *)node->value) -> matchtype;
 }
 
 static void * ef_chain_next(struct node * node){
@@ -326,7 +358,7 @@ static void * ef_chain_next(struct node * node){
 
 static void * ef_chain_type(struct node * node){
 	int i;
-	
+
 	for(i=0; redirs[i].name; i++){
 	    if(((struct chain *)node->value) -> type == redirs[i].redir) return redirs[i].name;
 	}
@@ -347,6 +379,18 @@ static void * ef_chain_user(struct node * node){
 
 static void * ef_chain_password(struct node * node){
 	return ((struct chain *)node->value) -> extpass;
+}
+
+static void * ef_chain_secure(struct node * node){
+	return &((struct chain *)node->value) -> secure;
+}
+
+static void * ef_chain_exthost(struct node * node){
+	return ((struct chain *)node->value) -> exthost;
+}
+
+static void * ef_chain_cidr(struct node * node){
+	return &((struct chain *)node->value) -> cidr;
 }
 
 static void * ef_ace_next(struct node * node){
@@ -379,6 +423,9 @@ static void * ef_ace_dst(struct node * node){
 	return ((struct ace *)node->value) -> dst;
 }
 
+static void * ef_ace_dstnames(struct node * node){
+	return ((struct ace *)node->value) -> dstnames;
+}
 
 static void * ef_ace_ports(struct node * node){
 	return ((struct ace *)node->value) -> ports;
@@ -396,6 +443,13 @@ static void * ef_ace_period(struct node * node){
 	return ((struct ace *)node->value) -> periods;
 }
 
+static void * ef_ace_weight(struct node * node){
+	return &((struct ace *)node->value) -> weight;
+}
+
+static void * ef_ace_nolog(struct node * node){
+	return &((struct ace *)node->value) -> nolog;
+}
 
 static void * ef_bandlimit_next(struct node * node){
 	return ((struct bandlim *)node->value) -> next;
@@ -489,6 +543,14 @@ static void * ef_server_childcount(struct node * node){
 	return &((struct srvparam *)node->value) -> childcount;
 }
 
+static void * ef_server_maxchild(struct node * node){
+	return &((struct srvparam *)node->value) -> maxchild;
+}
+
+static void * ef_server_backlog(struct node * node){
+	return &((struct srvparam *)node->value) -> backlog;
+}
+
 static void * ef_server_log(struct node * node){
 	if(((struct srvparam *)node->value) -> logfunc == lognone)	return "none";
 #ifndef NORADIUS
@@ -545,12 +607,68 @@ static void * ef_server_extsa6(struct node * node){
 }
 #endif
 
+static void * ef_server_intNat(struct node * node){
+	return &((struct srvparam *)node->value) -> intNat;
+}
+
+static void * ef_server_extNat(struct node * node){
+	return &((struct srvparam *)node->value) -> extNat;
+}
+
 static void * ef_server_acl(struct node * node){
 	return ((struct srvparam *)node->value) -> acl;
 }
 
 static void * ef_server_singlepacket(struct node * node){
 	return &((struct srvparam *)node->value) -> singlepacket;
+}
+
+static void * ef_server_needuser(struct node * node){
+	return &((struct srvparam *)node->value) -> needuser;
+}
+
+static void * ef_server_transparent(struct node * node){
+	return &((struct srvparam *)node->value) -> transparent;
+}
+
+static void * ef_server_anonymous(struct node * node){
+	return &((struct srvparam *)node->value) -> anonymous;
+}
+
+static void * ef_server_requirecert(struct node * node){
+	return &((struct srvparam *)node->value) -> requirecert;
+}
+
+static void * ef_server_haproxy(struct node * node){
+	return &((struct srvparam *)node->value) -> haproxy;
+}
+
+static void * ef_server_authcachetype(struct node * node){
+	return &((struct srvparam *)node->value) -> authcachetype;
+}
+
+static void * ef_server_authcachetime(struct node * node){
+	return &((struct srvparam *)node->value) -> authcachetime;
+}
+
+static void * ef_server_gracetraf(struct node * node){
+	return &((struct srvparam *)node->value) -> gracetraf;
+}
+
+static void * ef_server_gracenum(struct node * node){
+	return &((struct srvparam *)node->value) -> gracenum;
+}
+
+static void * ef_server_gracedelay(struct node * node){
+	return &((struct srvparam *)node->value) -> gracedelay;
+}
+
+static void * ef_server_logdumpsrv(struct node * node){
+	return &((struct srvparam *)node->value) -> logdumpsrv;
+}
+
+static void * ef_server_logdumpcli(struct node * node){
+	return &((struct srvparam *)node->value) -> logdumpcli;
 }
 
 static void * ef_server_starttime(struct node * node){
@@ -570,12 +688,12 @@ static void * ef_client_type(struct node * node){
 static void * ef_client_operation(struct node * node){
 	if(!((struct clientparam *)node->value) -> operation) return NULL;
 	return &((struct clientparam *)node->value) -> operation;
-	
+
 }
 
 static void * ef_client_redirected(struct node * node){
 	return &((struct clientparam *)node->value) -> redirected;
-	
+
 }
 
 static void * ef_client_hostname(struct node * node){
@@ -614,6 +732,26 @@ static void * ef_client_pwtype(struct node * node){
 	return &((struct clientparam *)node->value) -> pwtype;
 }
 
+static void * ef_client_redirtype(struct node * node){
+	int i;
+	for(i=0; redirs[i].name; i++){
+	    if(((struct clientparam *)node->value) -> redirtype == redirs[i].redir) return redirs[i].name;
+	}
+	return "";
+}
+
+static void * ef_client_weight(struct node * node){
+	return &((struct clientparam *)node->value) -> weight;
+}
+
+static void * ef_client_nolog(struct node * node){
+	return &((struct clientparam *)node->value) -> nolog;
+}
+
+static void * ef_client_transparent(struct node * node){
+	return &((struct clientparam *)node->value) -> transparent;
+}
+
 static void * ef_client_threadid(struct node * node){
 	return &((struct clientparam *)node->value) -> threadid;
 }
@@ -647,154 +785,179 @@ static void * ef_period_next(struct node * node){
 }
 
 static struct property prop_portlist[] = {
-	{prop_portlist + 1, "start", ef_portlist_start, TYPE_PORT, "port range start"},
-	{prop_portlist + 2, "end", ef_portlist_end, TYPE_PORT, "port range end"},
-	{NULL, "next", ef_portlist_next, TYPE_PORTLIST, "next"}
+	{"start", ef_portlist_start, TYPE_PORT, "port range start"},
+	{"end", ef_portlist_end, TYPE_PORT, "port range end"},
+	{"next", ef_portlist_next, TYPE_PORTLIST, "next"}
 };
 
 static struct property prop_userlist[] = {
-	{prop_userlist+1, "user", ef_userlist_user, TYPE_STRING, "user name"},
-	{NULL, "next", ef_userlist_next, TYPE_USERLIST, "next"}
+	{"user", ef_userlist_user, TYPE_STRING, "user name"},
+	{"next", ef_userlist_next, TYPE_USERLIST, "next"}
+};
+
+static struct property prop_hostname[] = {
+	{"name", ef_hostname_name, TYPE_STRING, "hostname pattern"},
+	{"matchtype", ef_hostname_matchtype, TYPE_INTEGER, "match type"},
+	{"next", ef_hostname_next, TYPE_HOSTNAME, "next"}
 };
 
 static struct property prop_pwlist[] = {
-	{prop_pwlist + 1, "user", ef_pwlist_user, TYPE_STRING, "user name"},
-	{prop_pwlist + 2, "password", ef_pwlist_password, TYPE_STRING, "password string"},
-	{prop_pwlist + 3, "type", ef_pwlist_type, TYPE_STRING, "password type"},
-	{NULL, "next", ef_pwlist_next, TYPE_PWLIST, "next"}
+	{"user", ef_pwlist_user, TYPE_STRING, "user name"},
+	{"password", ef_pwlist_password, TYPE_PASSWORD, "password string"},
+	{"type", ef_pwlist_type, TYPE_STRING, "password type"},
+	{"next", ef_pwlist_next, TYPE_PWLIST, "next"}
 };
 
 static struct property prop_chain[] = {
-	{prop_chain + 1, "addr", ef_chain_addr, TYPE_SA, "parent address"},
-	{prop_chain + 2, "type", ef_chain_type, TYPE_STRING, "parent type"},
-	{prop_chain + 3, "weight", ef_chain_weight, TYPE_SHORT, "parent weight 0-1000"},
-	{prop_chain + 4, "user", ef_chain_user, TYPE_STRING, "parent login"},
-	{prop_chain + 5, "password", ef_chain_password, TYPE_STRING, "parent password"},
-	{NULL, "next", ef_chain_next, TYPE_CHAIN, "next"}
+	{"addr", ef_chain_addr, TYPE_SA, "parent address"},
+	{"type", ef_chain_type, TYPE_STRING, "parent type"},
+	{"weight", ef_chain_weight, TYPE_SHORT, "parent weight 0-1000"},
+	{"user", ef_chain_user, TYPE_STRING, "parent login"},
+	{"password", ef_chain_password, TYPE_PASSWORD, "parent password"},
+	{"secure", ef_chain_secure, TYPE_INTEGER, "secure mode"},
+	{"exthost", ef_chain_exthost, TYPE_STRING, "external hostname"},
+	{"cidr", ef_chain_cidr, TYPE_SHORT, "CIDR"},
+	{"next", ef_chain_next, TYPE_CHAIN, "next"}
 };
 
 static struct property prop_period[] = {
-	{prop_period + 1, "fromtime", ef_period_fromtime, TYPE_TIME, "from time" },
-	{prop_period + 2, "totime", ef_period_totime, TYPE_TIME, "to time" },
-	{NULL, "next", ef_period_next, TYPE_PERIOD, "next"}
+	{"fromtime", ef_period_fromtime, TYPE_TIME, "from time" },
+	{"totime", ef_period_totime, TYPE_TIME, "to time" },
+	{"next", ef_period_next, TYPE_PERIOD, "next"}
 };
 
 static struct property prop_ace[] = {
-	{prop_ace + 1, "type", ef_ace_type, TYPE_STRING, "ace action"},
-	{prop_ace + 2, "operations", ef_ace_operations, TYPE_OPERATIONS, "request type"},
-	{prop_ace + 3, "users", ef_ace_users, TYPE_USERLIST, "list of users"},
-	{prop_ace + 4, "src", ef_ace_src, TYPE_IPLIST, "list of source ips"},
-	{prop_ace + 5, "dst", ef_ace_dst, TYPE_IPLIST, "list of destination ips"},
-	{prop_ace + 6, "ports", ef_ace_ports, TYPE_PORTLIST, "list of destination ports"},
-	{prop_ace + 7, "chain", ef_ace_chain, TYPE_CHAIN, "redirect to parent(s)"},
-	{prop_ace + 8, "wdays", ef_ace_weekdays, TYPE_WEEKDAYS, "days of week"},
-	{prop_ace + 9, "periods", ef_ace_period, TYPE_PERIOD, "time of the day"},
-	{NULL, "next", ef_ace_next, TYPE_ACE, "next"}
+	{"type", ef_ace_type, TYPE_STRING, "ace action"},
+	{"operations", ef_ace_operations, TYPE_OPERATIONS, "request type"},
+	{"users", ef_ace_users, TYPE_USERLIST, "list of users"},
+	{"src", ef_ace_src, TYPE_IPLIST, "list of source ips"},
+	{"dst", ef_ace_dst, TYPE_IPLIST, "list of destination ips"},
+	{"dstnames", ef_ace_dstnames, TYPE_HOSTNAME, "list of destination hostnames"},
+	{"ports", ef_ace_ports, TYPE_PORTLIST, "list of destination ports"},
+	{"chain", ef_ace_chain, TYPE_CHAIN, "redirect to parent(s)"},
+	{"wdays", ef_ace_weekdays, TYPE_WEEKDAYS, "days of week"},
+	{"periods", ef_ace_period, TYPE_PERIOD, "time of the day"},
+	{"weight", ef_ace_weight, TYPE_INTEGER, "ace weight"},
+	{"nolog", ef_ace_nolog, TYPE_INTEGER, "do not log"},
+	{"next", ef_ace_next, TYPE_ACE, "next"}
 };
 
 static struct property prop_bandlimit[] = {
-	{prop_bandlimit + 1, "ace", ef_bandlimit_ace, TYPE_ACE, "acl to apply"},
-	{prop_bandlimit + 2, "rate", ef_bandlimit_rate, TYPE_UNSIGNED, "max allowed bandwidth"},
-	{NULL, "next", ef_bandlimit_next, TYPE_BANDLIMIT, "next"}
+	{"ace", ef_bandlimit_ace, TYPE_ACE, "acl to apply"},
+	{"rate", ef_bandlimit_rate, TYPE_UNSIGNED, "max allowed bandwidth"},
+	{"next", ef_bandlimit_next, TYPE_BANDLIMIT, "next"}
 };
 
 static struct property prop_trafcounter[] = {
-	{prop_trafcounter + 1, "disabled", ef_trafcounter_disabled, TYPE_INTEGER, "counter status"},
-	{prop_trafcounter + 2, "ace", ef_trafcounter_ace, TYPE_ACE, "traffic to count"},
-	{prop_trafcounter + 3, "number", ef_trafcounter_number, TYPE_UNSIGNED, "counter number"},
-	{prop_trafcounter + 4, "type", ef_trafcounter_type, TYPE_ROTATION, "rotation type"},
-
-
-	{prop_trafcounter + 5, "traffic", ef_trafcounter_traffic64, TYPE_UNSIGNED64, "counter value"},
-	{prop_trafcounter + 6, "limit", ef_trafcounter_limit64, TYPE_UNSIGNED64, "counter limit"},
-	{prop_trafcounter + 7, "cleared", ef_trafcounter_cleared, TYPE_DATETIME, "last rotated"},
-	{prop_trafcounter + 8, "updated", ef_trafcounter_updated, TYPE_DATETIME, "last updated"},
-	{prop_trafcounter + 9, "comment", ef_trafcounter_comment, TYPE_STRING, "counter comment"},
-	{NULL, "next", ef_trafcounter_next, TYPE_TRAFCOUNTER}
+	{"disabled", ef_trafcounter_disabled, TYPE_INTEGER, "counter status"},
+	{"ace", ef_trafcounter_ace, TYPE_ACE, "traffic to count"},
+	{"number", ef_trafcounter_number, TYPE_UNSIGNED, "counter number"},
+	{"type", ef_trafcounter_type, TYPE_ROTATION, "rotation type"},
+	{"traffic", ef_trafcounter_traffic64, TYPE_UNSIGNED64, "counter value"},
+	{"limit", ef_trafcounter_limit64, TYPE_UNSIGNED64, "counter limit"},
+	{"cleared", ef_trafcounter_cleared, TYPE_DATETIME, "last rotated"},
+	{"updated", ef_trafcounter_updated, TYPE_DATETIME, "last updated"},
+	{"comment", ef_trafcounter_comment, TYPE_STRING, "counter comment"},
+	{"next", ef_trafcounter_next, TYPE_TRAFCOUNTER, "next"}
 };
 
-/*
-*/
-
 static struct property prop_server[] = {
-	{prop_server + 1, "servicetype", ef_server_type, TYPE_STRING, "type of the service/client"},
-	{prop_server + 2, "target", ef_server_target, TYPE_STRING, "portmapper target ip"},
-	{prop_server + 3, "targetport", ef_server_targetport, TYPE_PORT, "portmapper target port"},
-	{prop_server + 4, "starttime", ef_server_starttime, TYPE_DATETIME, "service started seconds"},
-	{prop_server + 5, "auth", ef_server_auth, TYPE_STRING, "service authentication type"},
-	{prop_server + 6, "acl", ef_server_acl, TYPE_ACE, "access control list"},
-	{prop_server + 7, "singlepacket", ef_server_singlepacket, TYPE_INTEGER, "is single packet redirection"},
-	{prop_server + 8, "log", ef_server_log, TYPE_STRING, "type of logging"},
-	{prop_server + 9, "logtarget", ef_server_logtarget, TYPE_STRING, "log target options"},
-	{prop_server + 10, "logformat", ef_server_logformat, TYPE_STRING, "logging format string"},
-	{prop_server + 11, "nonprintable", ef_server_nonprintable, TYPE_STRING, "non printable characters"},
-	{prop_server + 12, "replacement", ef_server_replacement, TYPE_CHAR, "replacement character"},
-	{prop_server + 13, "childcount", ef_server_childcount, TYPE_INTEGER, "number of servers connected"},
-	{prop_server + 14, "intsa", ef_server_intsa, TYPE_SA, "ip address of internal interface"},
-	{prop_server + 15, "extsa", ef_server_extsa, TYPE_SA, "ip address of external interface"},
+	{"servicetype", ef_server_type, TYPE_STRING, "type of the service/client"},
+	{"target", ef_server_target, TYPE_STRING, "portmapper target ip"},
+	{"targetport", ef_server_targetport, TYPE_PORT, "portmapper target port"},
+	{"starttime", ef_server_starttime, TYPE_DATETIME, "service started seconds"},
+	{"auth", ef_server_auth, TYPE_STRING, "service authentication type"},
+	{"acl", ef_server_acl, TYPE_ACE, "access control list"},
+	{"singlepacket", ef_server_singlepacket, TYPE_INTEGER, "is single packet redirection"},
+	{"log", ef_server_log, TYPE_STRING, "type of logging"},
+	{"logtarget", ef_server_logtarget, TYPE_STRING, "log target options"},
+	{"logformat", ef_server_logformat, TYPE_STRING, "logging format string"},
+	{"nonprintable", ef_server_nonprintable, TYPE_STRING, "non printable characters"},
+	{"replacement", ef_server_replacement, TYPE_CHAR, "replacement character"},
+	{"childcount", ef_server_childcount, TYPE_INTEGER, "number of servers connected"},
+	{"maxchild", ef_server_maxchild, TYPE_INTEGER, "max concurrent connections"},
+	{"backlog", ef_server_backlog, TYPE_INTEGER, "listen backlog"},
+	{"needuser", ef_server_needuser, TYPE_INTEGER, "require user authentication"},
+	{"transparent", ef_server_transparent, TYPE_INTEGER, "transparent proxy"},
+	{"anonymous", ef_server_anonymous, TYPE_INTEGER, "anonymous mode"},
+	{"requirecert", ef_server_requirecert, TYPE_INTEGER, "require client certificate"},
+	{"haproxy", ef_server_haproxy, TYPE_INTEGER, "HAProxy protocol"},
+	{"authcachetype", ef_server_authcachetype, TYPE_UNSIGNED, "authentication cache type"},
+	{"authcachetime", ef_server_authcachetime, TYPE_UNSIGNED, "authentication cache time"},
+	{"gracetraf", ef_server_gracetraf, TYPE_INTEGER, "grace traffic"},
+	{"gracenum", ef_server_gracenum, TYPE_INTEGER, "grace number"},
+	{"gracedelay", ef_server_gracedelay, TYPE_INTEGER, "grace delay"},
+	{"logdumpsrv", ef_server_logdumpsrv, TYPE_UNSIGNED, "log dump server traffic"},
+	{"logdumpcli", ef_server_logdumpcli, TYPE_UNSIGNED, "log dump client traffic"},
+	{"intsa", ef_server_intsa, TYPE_SA, "ip address of internal interface"},
+	{"extsa", ef_server_extsa, TYPE_SA, "ip address of external interface"},
+	{"intnat", ef_server_intNat, TYPE_SA, "internal NAT address"},
+	{"extnat", ef_server_extNat, TYPE_SA, "external NAT address"},
 #ifndef NOIPV6
-	{prop_server + 16, "extsa6", ef_server_extsa6, TYPE_SA, "ipv6 address of external interface"},
-	{prop_server + 17, "child", ef_server_child, TYPE_CLIENT, "connected clients"},
-#else
-	{prop_server + 16, "child", ef_server_child, TYPE_CLIENT, "connected clients"},
+	{"extsa6", ef_server_extsa6, TYPE_SA, "ipv6 address of external interface"},
 #endif
-	{NULL, "next", ef_server_next, TYPE_SERVER, "next"}
+	{"child", ef_server_child, TYPE_CLIENT, "connected clients"},
+	{"next", ef_server_next, TYPE_SERVER, "next"}
 };
 
 
 static struct property prop_client[] = {
-	{prop_client + 1, "servicetype", ef_client_type, TYPE_STRING, "type of the client"},
-	{prop_client + 2, "threadid", ef_client_threadid, TYPE_UNSIGNED64, "process thread id"},
-	{prop_client + 3, "starttime", ef_client_starttime, TYPE_DATETIME, "client started seconds"},
-	{prop_client + 4, "starttime_msec", ef_client_starttime_msec, TYPE_UNSIGNED, "client started milliseconds"},
-	{prop_client + 5, "redirected", ef_client_redirected, TYPE_INTEGER, "number of redirections"},
-	{prop_client + 6, "operation", ef_client_operation, TYPE_OPERATIONS, "action requested by client"},
-	{prop_client + 7, "hostname", ef_client_hostname, TYPE_STRING, "name of the requested host"},
-	{prop_client + 8, "extusername", ef_client_extusername, TYPE_STRING, "username for requested host"},
-	{prop_client + 9, "extpassword", ef_client_extpassword, TYPE_STRING, "password for requested host"},
-	{prop_client + 10, "username", ef_client_username, TYPE_STRING, "client username"},
-	{prop_client + 11, "password", ef_client_password, TYPE_STRING, "client password"},
-	{prop_client + 12, "clisa", ef_client_clisa, TYPE_SA, "client sa"},
-	{prop_client + 13, "srvsa", ef_client_srvsa, TYPE_SA, "target server sa"},
-	{prop_client + 14, "reqsa", ef_client_reqsa, TYPE_SA, "requested server sa"},
-	{prop_client + 15, "bytesin", ef_client_bytesin64, TYPE_UNSIGNED64, "bytes from server to client"},
-	{prop_client + 16, "bytesout", ef_client_bytesout64, TYPE_UNSIGNED64, "bytes from client to server"},
-	{prop_client + 17, "maxtrafin", ef_client_maxtrafin64, TYPE_UNSIGNED64, "maximum traffic allowed for download"},
-	{prop_client + 18, "maxtrafout", ef_client_maxtrafout64, TYPE_UNSIGNED64, "maximum traffic allowed for upload"},
-	{prop_client + 19, "pwtype", ef_client_pwtype, TYPE_INTEGER, "type of client password"},
-	{prop_client + 20, "clisock", ef_client_clisock, TYPE_INTEGER, "client socket"},
-	{prop_client + 21, "remsock", ef_client_remsock, TYPE_INTEGER, "remote socket"},
-	{NULL, "next", ef_client_next, TYPE_CLIENT, "next"}
-
-	
+	{"servicetype", ef_client_type, TYPE_STRING, "type of the client"},
+	{"threadid", ef_client_threadid, TYPE_UNSIGNED64, "process thread id"},
+	{"starttime", ef_client_starttime, TYPE_DATETIME, "client started seconds"},
+	{"starttime_msec", ef_client_starttime_msec, TYPE_UNSIGNED, "client started milliseconds"},
+	{"redirected", ef_client_redirected, TYPE_INTEGER, "number of redirections"},
+	{"operation", ef_client_operation, TYPE_OPERATIONS, "action requested by client"},
+	{"hostname", ef_client_hostname, TYPE_STRING, "name of the requested host"},
+	{"extusername", ef_client_extusername, TYPE_STRING, "username for requested host"},
+	{"extpassword", ef_client_extpassword, TYPE_PASSWORD, "password for requested host"},
+	{"username", ef_client_username, TYPE_STRING, "client username"},
+	{"password", ef_client_password, TYPE_PASSWORD, "client password"},
+	{"clisa", ef_client_clisa, TYPE_SA, "client sa"},
+	{"srvsa", ef_client_srvsa, TYPE_SA, "target server sa"},
+	{"reqsa", ef_client_reqsa, TYPE_SA, "requested server sa"},
+	{"bytesin", ef_client_bytesin64, TYPE_UNSIGNED64, "bytes from server to client"},
+	{"bytesout", ef_client_bytesout64, TYPE_UNSIGNED64, "bytes from client to server"},
+	{"maxtrafin", ef_client_maxtrafin64, TYPE_UNSIGNED64, "maximum traffic allowed for download"},
+	{"maxtrafout", ef_client_maxtrafout64, TYPE_UNSIGNED64, "maximum traffic allowed for upload"},
+	{"pwtype", ef_client_pwtype, TYPE_INTEGER, "type of client password"},
+	{"redirtype", ef_client_redirtype, TYPE_STRING, "redirection type"},
+	{"weight", ef_client_weight, TYPE_INTEGER, "weight"},
+	{"nolog", ef_client_nolog, TYPE_INTEGER, "do not log"},
+	{"transparent", ef_client_transparent, TYPE_INTEGER, "transparent proxy"},
+	{"clisock", ef_client_clisock, TYPE_INTEGER, "client socket"},
+	{"remsock", ef_client_remsock, TYPE_INTEGER, "remote socket"},
+	{"next", ef_client_next, TYPE_CLIENT, "next"}
 };
 
 struct datatype datatypes[64] = {
-	{"integer", NULL, pr_integer, NULL},
-	{"short", NULL, pr_short, NULL},
-	{"char", NULL, pr_char, NULL},
-	{"unsigned", NULL, pr_unsigned, NULL},
-	{"unsigned64", NULL, pr_unsigned64, NULL},
-	{"traffic", NULL, pr_traffic, NULL},
-	{"port", NULL, pr_port, NULL},
-	{"ip", NULL, pr_ip, NULL},
-	{"sa", NULL, pr_sa, NULL},
-	{"cidr", NULL, pr_cidr, NULL},
-	{"string", NULL, pr_string, NULL},
-	{"datetime", NULL, pr_datetime, NULL},
-	{"operations", NULL, pr_operations, NULL},
-	{"rotation", NULL, pr_rotation, NULL},
-	{"portlist", ef_portlist_next, pr_portlist, prop_portlist},
-	{"iplist", ef_iplist_next, pr_iplist, NULL},
-	{"userlist", ef_userlist_next, pr_userlist, prop_userlist},
-	{"pwlist", ef_pwlist_next, NULL, prop_pwlist},
-	{"chain", ef_chain_next, NULL, prop_chain},
-	{"ace", ef_ace_next, NULL, prop_ace},
-	{"bandlimit", ef_bandlimit_next, NULL, prop_bandlimit},
-	{"trafcounter", ef_trafcounter_next, NULL, prop_trafcounter},
-	{"client", ef_client_next, NULL, prop_client},
-	{"weekdays", NULL, pr_wdays, NULL},
-	{"time", NULL, pr_time, NULL},
-	{"period", ef_period_next, NULL, prop_period},
-	{"server", ef_server_next, NULL, prop_server}
+	{"integer", NULL, pr_integer, NULL, 0},
+	{"short", NULL, pr_short, NULL, 0},
+	{"char", NULL, pr_char, NULL, 0},
+	{"unsigned", NULL, pr_unsigned, NULL, 0},
+	{"unsigned64", NULL, pr_unsigned64, NULL, 0},
+	{"traffic", NULL, pr_traffic, NULL, 0},
+	{"port", NULL, pr_port, NULL, 0},
+	{"ip", NULL, pr_ip, NULL, 0},
+	{"sa", NULL, pr_sa, NULL, 0},
+	{"cidr", NULL, pr_cidr, NULL, 0},
+	{"string", NULL, pr_string, NULL, 0},
+	{"datetime", NULL, pr_datetime, NULL, 0},
+	{"operations", NULL, pr_operations, NULL, 0},
+	{"rotation", NULL, pr_rotation, NULL, 0},
+	{"portlist", ef_portlist_next, pr_portlist, prop_portlist, sizeof(prop_portlist)/sizeof(struct property)},
+	{"iplist", ef_iplist_next, pr_iplist, NULL, 0},
+	{"userlist", ef_userlist_next, pr_userlist, prop_userlist, sizeof(prop_userlist)/sizeof(struct property)},
+	{"pwlist", ef_pwlist_next, NULL, prop_pwlist, sizeof(prop_pwlist)/sizeof(struct property)},
+	{"chain", ef_chain_next, NULL, prop_chain, sizeof(prop_chain)/sizeof(struct property)},
+	{"ace", ef_ace_next, NULL, prop_ace, sizeof(prop_ace)/sizeof(struct property)},
+	{"bandlimit", ef_bandlimit_next, NULL, prop_bandlimit, sizeof(prop_bandlimit)/sizeof(struct property)},
+	{"trafcounter", ef_trafcounter_next, NULL, prop_trafcounter, sizeof(prop_trafcounter)/sizeof(struct property)},
+	{"client", ef_client_next, NULL, prop_client, sizeof(prop_client)/sizeof(struct property)},
+	{"weekdays", NULL, pr_wdays, NULL, 0},
+	{"time", NULL, pr_time, NULL, 0},
+	{"period", ef_period_next, NULL, prop_period, sizeof(prop_period)/sizeof(struct property)},
+	{"server", ef_server_next, NULL, prop_server, sizeof(prop_server)/sizeof(struct property)},
+	{"password", NULL, pr_password, NULL, 0},
+	{"hostname", ef_hostname_next, pr_hostname, prop_hostname, sizeof(prop_hostname)/sizeof(struct property)}
 };
